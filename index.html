@@ -103,7 +103,7 @@
                 <input type="submit" value="Join">
                 
                 <p id="message"></p>
-                <p class="login-link"><a href="http://127.0.0.1:5500/LoginPage/login.html">Already a Member? Login here</a></p>
+                <p class="login-link"><a href="/LoginPage/login.html">Already a Member? Login here</a></p>
             </form>
         </div>
     </div>
@@ -128,7 +128,7 @@
             // Send signup request
             axios.post('/signup', {
                 fullName,
-                email,
+                email: email.toLowerCase(),
                 username,
                 password,
             })
