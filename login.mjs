@@ -1,151 +1,128 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta http-equiv="X-UA-Compatible" content="IE=edge">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Signup Form</title>
-    <link rel="stylesheet" href="style.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
-    <style>
-        .input-wrapper {
-            position: relative;
-            margin-bottom: 15px;
-        }
+import express from 'express';
+import cors from 'cors';
+import mongoose from 'mongoose';
+import { stringToHash, verifyHash } from 'bcrypt-inzi';
+import path from 'path';
+import { fileURLToPath } from 'url';
 
-        .input-wrapper label {
-            display: block;
-            margin-bottom: 5px;
-            font-size: 0.8em;
-            color: #333;
-            font-weight: 700;
-        }
+// Initialize Express app
+const app = express();
+app.use(express.json());
+app.use(cors());
 
-        .input-wrapper input {
-            padding: 8px;
-            padding-right: 40px;
-            border: 1px solid #ddd;
-            border-radius: 5px;
-            font-size: 0.7em;
-            width: 100%;
-            box-sizing: border-box;
-            background-color: #ffffff;
-            outline: none;
-        }
+// Determine current directory for static files
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.use(express.static(path.join(__dirname, './'))); // Update to serve from the correct directory
 
-        .input-wrapper input:focus {
-            border-color: #7ebbfd;
-        }
+const port = process.env.PORT || 3000; // Ensure this port is not conflicting
 
-        .input-wrapper .input-icon {
-            font-size: 16px;
-            color: #7ebbfd;
-            position: absolute;
-            right: 10px;
-            top: 50%;
-            transform: translateY(-50%);
-            pointer-events: none;
-        }
+// MongoDB connection string
+const dbURI = 'mongodb+srv://satyam149sharma:satyam2000@hscodes.78y8n.mongodb.net/HS_Codes?retryWrites=true&w=majority';
 
-        #message {
-            color: red;
-            margin-top: 10px;
-            font-size: 0.9em;
-        }
-    </style>
-</head>
-<body>
-    <div class="main-container">
-        <div class="image-container">
-            <img src="LHS.jpg" alt="Company Logo">
-        </div>
-        <div class="form-container">
-            <div id="header">
-                <h1>Sign Up</h1>
-                <p>Enter details to proceed</p>
-            </div>
-            <form onsubmit="signup(); return false;">
-                <div class="input-wrapper">
-                    <label for="fullName">Full Name</label>
-                    <input type="text" id="fullName" placeholder="Enter your full name" required>
-                    <i class="fas fa-user input-icon"></i>
-                </div>
+mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+    .then(() => console.log('Mongoose is connected'))
+    .catch(err => console.error('Mongoose connection error:', err));
 
-                <div class="input-wrapper">
-                    <label for="email">Email</label>
-                    <input type="email" id="email" placeholder="Enter email address" required>
-                    <i class="fas fa-envelope input-icon"></i>
-                </div>
+// User schema
+const userSchema = new mongoose.Schema({
+    fullName: { type: String, required: true },
+    username: { type: String, required: true, unique: true },
+    email: { type: String, required: true, unique: true },
+    password: { type: String, required: true },
+    createdOn: { type: Date, default: Date.now },
+});
 
-                <div class="input-wrapper">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" placeholder="Create a username" required>
-                    <i class="fas fa-user-tag input-icon"></i>
-                </div>
+const userModel = mongoose.model('User', userSchema);
 
-                <div class="input-wrapper">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" placeholder="**************************************" required>
-                    <i class="fas fa-lock input-icon"></i>
-                </div>
+// Serve the main HTML file at the root URL
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-                <div class="input-wrapper">
-                    <label for="repeatPassword">Confirm Password</label>
-                    <input type="password" id="repeatPassword" placeholder="**************************************" required>
-                    <i class="fas fa-lock input-icon"></i>
-                </div>
+// Signup route
+app.post('/signup', async (req, res) => {
+    const { fullName, username, email, password } = req.body;
 
-                <label>
-                    <input type="checkbox" id="terms" required>
-                    Agree to <a href="#" rel="noopener noreferrer">Terms And Privacy Policy</a>
-                </label>
-
-                <input type="submit" value="Join">
-                
-                <p id="message"></p>
-                <p class="login-link"><a href="/LoginPage/login.html">Already a Member? Login here</a></p>
-            </form>
-        </div>
-    </div>
-    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-    <script>
-        function signup() {
-            var fullName = document.getElementById('fullName').value;
-            var email = document.getElementById('email').value;
-            var username = document.getElementById('username').value;
-            var password = document.getElementById('password').value;
-            var repeatPassword = document.getElementById('repeatPassword').value;
-
-            // Validate passwords
-            if (password !== repeatPassword) {
-                document.querySelector("#message").innerHTML = 'Passwords do not match, please try again';
-                return;
+    if (!fullName || !username || !email || !password) {
+        return res.status(400).send({
+            message: 'Required fields missing',
+            example: {
+                fullName: 'John Doe',
+                username: 'john_doe',
+                email: 'abc@abc.com',
+                password: '12345'
             }
+        });
+    }
 
-            // Clear previous messages
-            document.querySelector("#message").innerHTML = '';
+    try {
+        const existingUser = await userModel.findOne({ email }).exec();
 
-            // Send signup request
-            axios.post('/signup', {
-                fullName,
-                email: email.toLowerCase(),
-                username,
-                password,
-            })
-            .then(function (response) {
-                console.log(response.data);
-                document.querySelector("#message").innerHTML = response.data.message;
-            })
-            .catch(function (error) {
-                // Handle error messages
-                if (error.response && error.response.data) {
-                    document.querySelector("#message").innerHTML = error.response.data.message;
-                } else {
-                    document.querySelector("#message").innerHTML = 'An unexpected error occurred. Please try again.';
-                }
-                console.error('Signup error:', error);
-            });
+        if (existingUser) {
+            return res.status(400).send({ message: 'User already exists. Please try a different email.' });
         }
-    </script>
-</body>
-</html>
+
+        const hashedPassword = await stringToHash(password);
+        const newUser = new userModel({
+            fullName,
+            username,
+            email: email.toLowerCase(),
+            password: hashedPassword
+        });
+
+        await newUser.save();
+        res.status(201).send({ message: 'User created successfully.' });
+    } catch (error) {
+        console.error('Error during signup:', error);
+        res.status(500).send({ message: 'Internal server error.' });
+    }
+});
+
+// Login route
+app.post('/login', async (req, res) => {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+        return res.status(400).send({
+            message: 'Required fields missing',
+            example: {
+                email: 'abc@abc.com',
+                password: '12345'
+            }
+        });
+    }
+
+    try {
+        const user = await userModel.findOne({ email }).exec();
+
+        if (!user) {
+            return res.status(404).send({ message: 'User not found.' });
+        }
+
+        const isPasswordValid = await verifyHash(password, user.password);
+
+        if (!isPasswordValid) {
+            return res.status(401).send({ message: 'Incorrect password.' });
+        }
+
+        res.status(200).json({
+            fullName: user.fullName,
+            username: user.username,
+            email: user.email,
+            message: 'Login successful.',
+            redirectUrl: `https://host3-5.onrender.com` 
+        });
+    } catch (error) {
+        console.error('Error during login:', error);
+        res.status(500).send({ message: 'Internal server error.' });
+    }
+});
+
+// Handle 404 for undefined routes
+app.use((req, res) => {
+    res.status(404).send('404 Not Found');
+});
+
+// Start server
+app.listen(port, () => console.log(`Server running on port ${port}`));
