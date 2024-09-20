@@ -1,30 +1,61 @@
 import express from 'express';
-import cors from 'cors';
-import mongoose from 'mongoose';
-import { stringToHash, verifyHash } from 'bcrypt-inzi';
+import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
+import csv from 'csv-parser';
+import mongoose from 'mongoose';
+import cors from 'cors';
+import { stringToHash, verifyHash } from 'bcrypt-inzi';
+import dotenv from 'dotenv';
 
-// Initialize Express app
+dotenv.config();
 const app = express();
+const __dirname = path.resolve();
+
 app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
 app.use(cors());
+app.use(express.static(path.join(__dirname, '../LoginPage')));
 
-// Determine current directory for static files
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, '../Frontend'))); // Update to serve from the correct directory
 
-const port = process.env.PORT || 3000; // Ensure this port is not conflicting
 
-// MongoDB connection string
-const dbURI = 'mongodb+srv://satyam149sharma:satyam2000@hscodes.78y8n.mongodb.net/HS_Codes?retryWrites=true&w=majority';
+// Routes for CSV Data Processing
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'LoginPage', 'index.html'));
+});
 
-mongoose.connect(dbURI, { useNewUrlParser: true, useUnifiedTopology: true })
+
+// Database Connection
+const dbURI = process.env.MONGODB_URI || `mongodb+srv://satyam149sharma:satyam2000@hscodes.78y8n.mongodb.net/HS_Codes?retryWrites=true&w=majority`;
+
+mongoose.connect(dbURI, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    serverSelectionTimeoutMS: 5000, // timeout after 5 seconds
+})
     .then(() => console.log('Mongoose is connected'))
-    .catch(err => console.error('Mongoose connection error:', err));
+    .catch(err => {
+        console.error('Mongoose connection error:', err);
+        process.exit(1);
+    });
 
-// User schema
+mongoose.connection.on('disconnected', () => {
+    console.log('Mongoose is disconnected');
+});
+
+mongoose.connection.on('error', err => {
+    console.error('Mongoose connection error:', err);
+    process.exit(1);
+});
+
+process.on('SIGINT', () => {
+    console.log('App is terminating');
+    mongoose.connection.close(() => {
+        console.log('Mongoose default connection closed');
+        process.exit(0);
+    });
+});
+
+// User Schema
 const userSchema = new mongoose.Schema({
     fullName: { type: String, required: true },
     username: { type: String, required: true, unique: true },
@@ -35,24 +66,19 @@ const userSchema = new mongoose.Schema({
 
 const userModel = mongoose.model('User', userSchema);
 
-// Serve the main HTML file at the root URL
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, '../LoginPage/index.html'));
-});
-
-// Signup route
+// Signup Route
 app.post('/signup', async (req, res) => {
     const { fullName, username, email, password } = req.body;
 
     if (!fullName || !username || !email || !password) {
-        return res.status(400).send({
+        return res.status(400).json({
             message: 'Required fields missing',
             example: {
                 fullName: 'John Doe',
-                username: 'john_doe',
+                username: 'johndoe',
                 email: 'abc@abc.com',
-                password: '12345'
-            }
+                password: '12345',
+            },
         });
     }
 
@@ -60,7 +86,7 @@ app.post('/signup', async (req, res) => {
         const existingUser = await userModel.findOne({ email }).exec();
 
         if (existingUser) {
-            return res.status(400).send({ message: 'User already exists. Please try a different email.' });
+            return res.status(400).json({ message: 'User already exists. Please try a different email.' });
         }
 
         const hashedPassword = await stringToHash(password);
@@ -68,42 +94,46 @@ app.post('/signup', async (req, res) => {
             fullName,
             username,
             email: email.toLowerCase(),
-            password: hashedPassword
+            password: hashedPassword,
         });
 
         await newUser.save();
-        res.status(201).send({ message: 'User created successfully.' });
+        res.status(201).json({ message: 'User created successfully.' });
     } catch (error) {
         console.error('Error during signup:', error);
-        res.status(500).send({ message: 'Internal server error.' });
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
 
-// Login route
+// Login Route
 app.post('/login', async (req, res) => {
     const { email, password } = req.body;
 
     if (!email || !password) {
-        return res.status(400).send({
+        return res.status(400).json({
             message: 'Required fields missing',
             example: {
                 email: 'abc@abc.com',
-                password: '12345'
-            }
+                password: '12345',
+            },
         });
     }
 
     try {
-        const user = await userModel.findOne({ email }).exec();
+        console.log(`Login attempt with email: ${email}`);
+        const user = await userModel.findOne({ email: email.toLowerCase() }).exec();
 
         if (!user) {
-            return res.status(404).send({ message: 'User not found.' });
+            console.log('User not found in the database');
+            return res.status(404).json({ message: 'User not found.' });
         }
 
+        console.log('User found:', user);
         const isPasswordValid = await verifyHash(password, user.password);
 
         if (!isPasswordValid) {
-            return res.status(401).send({ message: 'Incorrect password.' });
+            console.log('Invalid password');
+            return res.status(401).json({ message: 'Incorrect password.' });
         }
 
         res.status(200).json({
@@ -111,18 +141,10 @@ app.post('/login', async (req, res) => {
             username: user.username,
             email: user.email,
             message: 'Login successful.',
-            redirectUrl: `https://host3-5.onrender.com` 
+            redirectUrl: 'https://host3-5.onrender.com',
         });
     } catch (error) {
         console.error('Error during login:', error);
-        res.status(500).send({ message: 'Internal server error.' });
+        res.status(500).json({ message: 'Internal server error.' });
     }
 });
-
-// Handle 404 for undefined routes
-app.use((req, res) => {
-    res.status(404).send('404 Not Found');
-});
-
-// Start server
-app.listen(port, () => console.log(`Server running on port ${port}`));
