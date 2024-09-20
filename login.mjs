@@ -1,13 +1,11 @@
 import express from 'express';
 import fs from 'fs';
 import path from 'path';
+import csv from 'csv-parser';
 import mongoose from 'mongoose';
+import cors from 'cors';
 import { stringToHash, verifyHash } from 'bcrypt-inzi';
-import dotenv from 'dotenv';
 
-dotenv.config();
-const app = express();
-const __dirname = path.resolve();
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
@@ -18,7 +16,7 @@ app.use(express.static(path.join(__dirname, '../LoginPage')));
 
 // Routes for CSV Data Processing
 app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname,'index.html'));
+    res.sendFile(path.join(__dirname, 'LoginPage', 'index.html'));
 });
 
 
