@@ -13,7 +13,7 @@ app.use(cors());
 // Determine current directory for static files
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, '../Frontend'))); // Update to serve from the correct directory
+app.use(express.static(path.join(__dirname, './')));
 
 const port = process.env.PORT || 3000; // Ensure this port is not conflicting
 
