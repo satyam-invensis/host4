@@ -13,7 +13,7 @@ app.use(cors());
 // Determine current directory for static files
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-app.use(express.static(path.join(__dirname, '../Frontend')));
+app.use(express.static(path.join(__dirname, '../Frontend'))); // Update to serve from the correct directory
 
 const port = process.env.PORT || 3000; // Ensure this port is not conflicting
 
@@ -34,6 +34,11 @@ const userSchema = new mongoose.Schema({
 });
 
 const userModel = mongoose.model('User', userSchema);
+
+// Serve the main HTML file at the root URL
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, '../LoginPage/index.html'));
+});
 
 // Signup route
 app.post('/signup', async (req, res) => {
@@ -112,6 +117,11 @@ app.post('/login', async (req, res) => {
         console.error('Error during login:', error);
         res.status(500).send({ message: 'Internal server error.' });
     }
+});
+
+// Handle 404 for undefined routes
+app.use((req, res) => {
+    res.status(404).send('404 Not Found');
 });
 
 // Start server
